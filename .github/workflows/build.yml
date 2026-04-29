@@ -10,7 +10,7 @@ jobs:
   test:
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install XcodeGen
         run: brew install xcodegen
@@ -44,7 +44,7 @@ jobs:
             CODE_SIGNING_ALLOWED=NO
 
       - name: Upload .app artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: OpenRouterDesktop-${{ github.sha }}
           path: build/Build/Products/Release/OpenRouterDesktop.app
