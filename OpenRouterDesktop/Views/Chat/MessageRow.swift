@@ -52,6 +52,9 @@ struct MessageRow: View {
         Markdown(message.content)
             .markdownTheme(.gitHub)
             .markdownCodeSyntaxHighlighter(.swiftHighlighter)
+            .markdownBlockStyle(\.codeBlock) { configuration in
+                CopyableCodeBlock(configuration: configuration)
+            }
             .textSelection(.enabled)
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)

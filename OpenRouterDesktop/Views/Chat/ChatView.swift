@@ -5,19 +5,34 @@ struct ChatView: View {
     @EnvironmentObject var modelsViewModel: ModelsViewModel
     @EnvironmentObject var conversationsViewModel: ConversationsViewModel
     @FocusState private var isInputFocused: Bool
+    @FocusState private var isChatSearchFocused: Bool
     @State private var showModelPicker: Bool = false
     @State private var showSystemPromptEditor: Bool = false
     @State private var showPromptPicker: Bool = false
     @State private var systemPromptDraft: String = ""
+    @State private var chatSearchVisible: Bool = false
+    @State private var chatSearchText: String = ""
 
     private var messages: [Message] {
-        conversationsViewModel.activeConversation?.messages ?? []
+        let all = conversationsViewModel.activeConversation?.messages ?? []
+        let query = chatSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard chatSearchVisible, !query.isEmpty else { return all }
+        return all.filter { $0.content.localizedCaseInsensitiveContains(query) }
+    }
+
+    private var totalMessages: Int {
+        conversationsViewModel.activeConversation?.messages.count ?? 0
     }
 
     var body: some View {
         VStack(spacing: 0) {
             modelPickerBar
             Divider()
+
+            if chatSearchVisible {
+                chatSearchBar
+                Divider()
+            }
 
             if messages.isEmpty {
                 emptyStateView
@@ -32,6 +47,58 @@ struct ChatView: View {
         .sheet(isPresented: $showSystemPromptEditor) {
             systemPromptSheet
         }
+        .background(findShortcutButton)
+    }
+
+    /// Invisible button that registers Cmd+F as the standard "Find" action and adds it
+    /// to the Edit menu automatically. Toggling closes the bar; opening focuses the field.
+    private var findShortcutButton: some View {
+        Button("Find in Chat") {
+            if chatSearchVisible {
+                chatSearchVisible = false
+                chatSearchText = ""
+            } else {
+                chatSearchVisible = true
+                isChatSearchFocused = true
+            }
+        }
+        .keyboardShortcut("f", modifiers: [.command])
+        .opacity(0)
+        .frame(width: 0, height: 0)
+        .accessibilityHidden(true)
+    }
+
+    private var chatSearchBar: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .foregroundColor(.secondary)
+                .font(.caption)
+            TextField("Search this chat", text: $chatSearchText)
+                .textFieldStyle(.plain)
+                .focused($isChatSearchFocused)
+                .onSubmit { isChatSearchFocused = false }
+                .onExitCommand {
+                    chatSearchVisible = false
+                    chatSearchText = ""
+                }
+            if !chatSearchText.isEmpty {
+                Text("\(messages.count) of \(totalMessages)")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            Button {
+                chatSearchVisible = false
+                chatSearchText = ""
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundColor(.secondary)
+            }
+            .buttonStyle(.borderless)
+            .help("Close search (Esc)")
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 6)
+        .background(Color.yellow.opacity(0.08))
     }
 
     private var modelPickerBar: some View {
@@ -61,13 +128,61 @@ struct ChatView: View {
             Spacer()
 
             if let active = conversationsViewModel.activeConversation {
-                Text(active.displayTokens)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                conversationStatsView(for: active)
             }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
+    }
+
+    @ViewBuilder
+    private func conversationStatsView(for active: Conversation) -> some View {
+        let model = modelsViewModel.selectedModel
+        let usage = active.contextUsage(for: model)
+        let cost = active.estimatedCost(for: model)
+
+        HStack(spacing: 8) {
+            if let cost, cost > 0 {
+                Text(Self.formatCost(cost))
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .help("Estimated USD cost based on heuristic token count and the model's per-token price.")
+            }
+
+            Text(active.displayTokens)
+                .font(.caption)
+                .foregroundColor(tokenLabelColor(usage: usage))
+                .help(contextHelpText(usage: usage, model: model))
+
+            if let usage, usage >= 0.8 {
+                Image(systemName: usage >= 1.0 ? "exclamationmark.triangle.fill" : "exclamationmark.triangle")
+                    .font(.caption)
+                    .foregroundColor(usage >= 1.0 ? .red : .orange)
+                    .help(contextHelpText(usage: usage, model: model))
+            }
+        }
+    }
+
+    private func tokenLabelColor(usage: Double?) -> Color {
+        guard let usage else { return .secondary }
+        if usage >= 1.0 { return .red }
+        if usage >= 0.8 { return .orange }
+        return .secondary
+    }
+
+    private func contextHelpText(usage: Double?, model: OpenRouterModel?) -> String {
+        guard let usage, let limit = model?.contextLength else {
+            return "Approximate token count for this chat."
+        }
+        let pct = Int(usage * 100)
+        return "\(pct)% of \(limit.formatted()) token context window."
+    }
+
+    /// Format USD cost with appropriate precision. Sub-cent → "<$0.01".
+    private static func formatCost(_ value: Double) -> String {
+        if value < 0.01 { return "<$0.01" }
+        if value < 1 { return String(format: "$%.3f", value) }
+        return String(format: "$%.2f", value)
     }
 
     @ViewBuilder
@@ -175,9 +290,16 @@ struct ChatView: View {
                                     modelsViewModel.selectModel(model)
                                     showModelPicker = false
                                 } label: {
-                                    HStack {
-                                        Text(model.name)
-                                            .lineLimit(1)
+                                    HStack(alignment: .firstTextBaseline) {
+                                        VStack(alignment: .leading, spacing: 1) {
+                                            Text(model.name)
+                                                .lineLimit(1)
+                                            if let price = model.priceDescription {
+                                                Text(price)
+                                                    .font(.caption2)
+                                                    .foregroundColor(model.isFree ? .green : .secondary)
+                                            }
+                                        }
                                         Spacer()
                                         if modelsViewModel.selectedModel?.id == model.id {
                                             Image(systemName: "checkmark")

@@ -18,12 +18,30 @@ struct OpenRouterModel: Identifiable, Codable {
         guard let pricing = pricing else { return false }
         return pricing.prompt == 0 && pricing.completion == 0
     }
-    
+
     var family: String {
         let components = id.components(separatedBy: "/")
         return components.first ?? "Other"
     }
-    
+
+    /// Human-readable price line like "$3.00 / $15.00 per 1M" or "Free" or nil if pricing unknown.
+    /// OpenRouter quotes per-token; we multiply by 1M for readability.
+    var priceDescription: String? {
+        guard let pricing else { return nil }
+        if isFree { return "Free" }
+        let promptPer1M = pricing.prompt * 1_000_000
+        let completionPer1M = pricing.completion * 1_000_000
+        return "$\(Self.formatPrice(promptPer1M)) / $\(Self.formatPrice(completionPer1M)) per 1M"
+    }
+
+    private static func formatPrice(_ value: Double) -> String {
+        if value >= 1 {
+            return String(format: "%.2f", value)
+        }
+        // sub-dollar prices (e.g. $0.05/M) deserve more precision
+        return String(format: "%.3f", value)
+    }
+
     struct Pricing: Codable, Equatable {
         let prompt: Double
         let completion: Double
