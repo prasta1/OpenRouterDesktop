@@ -1,0 +1,25 @@
+# macOS
+.DS_Store
+
+# XcodeGen generates the .xcodeproj from project.yml
+OpenRouterDesktop.xcodeproj/
+
+# Xcode user-specific state
+xcuserdata/
+*.xcuserstate
+*.xcuserdatad/
+
+# Build artifacts
+build/
+DerivedData/
+.build/
+*.swiftpm/
+*.dSYM
+*.dSYM.zip
+
+# Swift Package Manager
+Package.resolved
+
+# IDE / editors
+.vscode/
+.idea/
