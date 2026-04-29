@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [main]
 
+# Opt in to Node 24 for JavaScript actions ahead of GitHub's June 2026 default.
+# Some actions (e.g. upload-artifact@v5 as of this writing) still ship Node 20;
+# this flag forces them onto Node 24 now and clears the deprecation warning.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   test:
     runs-on: macos-15
