@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 jobs:
-  build:
+  test:
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
@@ -18,14 +18,35 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate
 
-      - name: Build
+      - name: Run tests
         run: |
+          set -o pipefail
           xcodebuild \
             -project OpenRouterDesktop.xcodeproj \
             -scheme OpenRouterDesktop \
             -destination 'platform=macOS' \
             -configuration Debug \
+            test \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Build release artifact
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project OpenRouterDesktop.xcodeproj \
+            -scheme OpenRouterDesktop \
+            -destination 'platform=macOS' \
+            -configuration Release \
+            -derivedDataPath build \
             build \
             CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO \
-            | xcpretty || (xcodebuild -project OpenRouterDesktop.xcodeproj -scheme OpenRouterDesktop -destination 'platform=macOS' -configuration Debug build CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO)
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Upload .app artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenRouterDesktop-${{ github.sha }}
+          path: build/Build/Products/Release/OpenRouterDesktop.app
+          retention-days: 14
+          if-no-files-found: error

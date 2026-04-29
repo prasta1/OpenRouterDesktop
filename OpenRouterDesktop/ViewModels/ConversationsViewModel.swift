@@ -155,28 +155,7 @@ final class ConversationsViewModel: ObservableObject {
 
     /// Markdown rendering of a conversation. Used for export.
     func markdownExport(for conversationID: UUID) -> String? {
-        guard let convo = conversations.first(where: { $0.id == conversationID }) else { return nil }
-        var lines: [String] = []
-        lines.append("# \(convo.name)")
-        lines.append("")
-        if let modelID = convo.modelID {
-            lines.append("_Model: \(modelID)_")
-            lines.append("")
-        }
-        if let prompt = convo.systemPrompt, !prompt.isEmpty {
-            lines.append("## System")
-            lines.append("")
-            lines.append(prompt)
-            lines.append("")
-        }
-        for message in convo.messages {
-            let header = message.role == .user ? "## User" : "## Assistant"
-            lines.append(header)
-            lines.append("")
-            lines.append(message.content)
-            lines.append("")
-        }
-        return lines.joined(separator: "\n")
+        conversations.first(where: { $0.id == conversationID })?.markdownExport
     }
 
     // MARK: - Navigation helpers

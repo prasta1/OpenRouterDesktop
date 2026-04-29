@@ -73,13 +73,21 @@ final class ConversationStore {
     func migrateLegacyConversation() -> Conversation? {
         let fm = FileManager.default
         guard fm.fileExists(atPath: legacyFileURL.path),
-              let data = try? Data(contentsOf: legacyFileURL),
-              let messages = try? decoder.decode([Message].self, from: data),
-              !messages.isEmpty else { return nil }
+              let data = try? Data(contentsOf: legacyFileURL) else { return nil }
+        guard let convo = Self.makeMigratedConversation(from: data, decoder: decoder) else { return nil }
+        save(convo)
+        try? fm.removeItem(at: legacyFileURL)
+        return convo
+    }
 
+    /// Pure rendering of the migration logic — no IO, so it's unit-testable.
+    /// Returns nil if `data` doesn't decode as `[Message]` or contains no messages.
+    static func makeMigratedConversation(from data: Data, decoder: JSONDecoder) -> Conversation? {
+        guard let messages = try? decoder.decode([Message].self, from: data),
+              !messages.isEmpty else { return nil }
         let firstUserContent = messages.first(where: { $0.role == .user })?.content ?? "Imported chat"
         let name = String(firstUserContent.prefix(40)).trimmingCharacters(in: .whitespacesAndNewlines)
-        let convo = Conversation(
+        return Conversation(
             id: UUID(),
             name: name.isEmpty ? "Imported chat" : name,
             folderID: nil,
@@ -88,8 +96,5 @@ final class ConversationStore {
             updatedAt: messages.last?.timestamp ?? Date(),
             modelID: nil
         )
-        save(convo)
-        try? fm.removeItem(at: legacyFileURL)
-        return convo
     }
 }

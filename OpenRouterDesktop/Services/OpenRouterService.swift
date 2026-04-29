@@ -55,6 +55,28 @@ final class OpenRouterService {
         retryableURLErrorCodes.contains(error.code)
     }
 
+    /// Parsed result of a single SSE line. Pure — no I/O — so it's testable in isolation.
+    enum SSELineResult: Equatable {
+        case ignore             // non-data line (event:, comment, blank, role-only delta)
+        case done               // OpenAI/OpenRouter "[DONE]" sentinel
+        case delta(String)      // content fragment to yield
+        case malformed(String)  // saw `data: ...` but couldn't decode — payload returned for logging
+    }
+
+    static func parseSSELine(_ line: String, decoder: JSONDecoder = JSONDecoder()) -> SSELineResult {
+        guard line.hasPrefix("data: ") else { return .ignore }
+        let payload = String(line.dropFirst(6))
+        if payload == "[DONE]" { return .done }
+        guard let data = payload.data(using: .utf8) else { return .malformed(payload) }
+        do {
+            let chunk = try decoder.decode(ChatCompletionStreamChunk.self, from: data)
+            guard let delta = chunk.choices.first?.delta.content, !delta.isEmpty else { return .ignore }
+            return .delta(delta)
+        } catch {
+            return .malformed(payload)
+        }
+    }
+
     private init() {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 120
@@ -155,16 +177,16 @@ final class OpenRouterService {
                     let decoder = JSONDecoder()
                     for try await line in bytes.lines {
                         if Task.isCancelled { break }
-                        guard line.hasPrefix("data: ") else { continue }
-                        let payload = String(line.dropFirst(6))
-                        if payload == "[DONE]" {
+                        switch Self.parseSSELine(line, decoder: decoder) {
+                        case .ignore:
+                            continue
+                        case .done:
                             continuation.finish()
                             return
-                        }
-                        guard let data = payload.data(using: .utf8) else { continue }
-                        if let chunk = try? decoder.decode(ChatCompletionStreamChunk.self, from: data),
-                           let delta = chunk.choices.first?.delta.content {
-                            continuation.yield(delta)
+                        case .delta(let chunk):
+                            continuation.yield(chunk)
+                        case .malformed(let payload):
+                            self.logger.warning("malformed SSE chunk skipped: \(payload, privacy: .private)")
                         }
                     }
                     continuation.finish()

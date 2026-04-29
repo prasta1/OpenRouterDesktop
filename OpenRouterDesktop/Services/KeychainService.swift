@@ -3,11 +3,16 @@ import Security
 
 final class KeychainService {
     static let shared = KeychainService()
-    
-    private let service = AppConstants.keychainService
-    private let apiKeyKey = "openrouter_api_key"
-    
-    private init() {}
+
+    private let service: String
+    private let apiKeyKey: String
+
+    /// Default constructor wraps the production keychain service. Tests pass a unique
+    /// service name to avoid touching the user's real API key.
+    init(service: String = AppConstants.keychainService, apiKeyKey: String = "openrouter_api_key") {
+        self.service = service
+        self.apiKeyKey = apiKeyKey
+    }
     
     func saveAPIKey(_ apiKey: String) -> Bool {
         deleteAPIKey()

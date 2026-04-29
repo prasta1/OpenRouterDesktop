@@ -74,4 +74,56 @@ struct Conversation: Identifiable, Codable, Equatable {
         }
         return "\(count) tokens"
     }
+
+    /// Sum of approximate prompt tokens (everything sent to the model on the next call).
+    /// Same as `approxTokenCount` for now; named separately so cost-split helpers stay readable.
+    var approxPromptTokens: Int { approxTokenCount }
+
+    /// Approximate tokens for assistant messages only — used for cost estimation
+    /// since OpenRouter charges different rates for prompt vs. completion.
+    var approxCompletionTokens: Int {
+        messages
+            .filter { $0.role == .assistant }
+            .reduce(0) { $0 + $1.content.approximateTokenCount }
+    }
+
+    /// Returns 0…1 if `contextLength` is known, else nil. Used for a warning when
+    /// the conversation is approaching the model's window.
+    func contextUsage(for model: OpenRouterModel?) -> Double? {
+        guard let limit = model?.contextLength, limit > 0 else { return nil }
+        return Double(approxTokenCount) / Double(limit)
+    }
+
+    /// USD cost estimate for the prompt+completions sent so far. Returns nil for free
+    /// models (so the UI can hide the line) and 0.0 if pricing is unknown but provided.
+    func estimatedCost(for model: OpenRouterModel?) -> Double? {
+        guard let pricing = model?.pricing, !(model?.isFree ?? true) else { return nil }
+        let promptCost = Double(approxPromptTokens) * pricing.prompt
+        let completionCost = Double(approxCompletionTokens) * pricing.completion
+        return promptCost + completionCost
+    }
+
+    /// Markdown rendering of the chat. Pure — no view-model state, so it's testable.
+    var markdownExport: String {
+        var lines: [String] = []
+        lines.append("# \(name)")
+        lines.append("")
+        if let modelID {
+            lines.append("_Model: \(modelID)_")
+            lines.append("")
+        }
+        if let prompt = systemPrompt, !prompt.isEmpty {
+            lines.append("## System")
+            lines.append("")
+            lines.append(prompt)
+            lines.append("")
+        }
+        for message in messages {
+            lines.append(message.role == .user ? "## User" : "## Assistant")
+            lines.append("")
+            lines.append(message.content)
+            lines.append("")
+        }
+        return lines.joined(separator: "\n")
+    }
 }

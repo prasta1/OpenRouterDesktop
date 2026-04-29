@@ -50,3 +50,29 @@ targets:
         com.apple.security.app-sandbox: true
         com.apple.security.network.client: true
         com.apple.security.files.user-selected.read-write: true
+
+  OpenRouterDesktopTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: OpenRouterDesktopTests
+        excludes:
+          - "**/.DS_Store"
+    dependencies:
+      - target: OpenRouterDesktop
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.openrouter.desktop.tests
+        GENERATE_INFOPLIST_FILE: YES
+        BUNDLE_LOADER: $(TEST_HOST)
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/OpenRouterDesktop.app/Contents/MacOS/OpenRouterDesktop
+
+schemes:
+  OpenRouterDesktop:
+    build:
+      targets:
+        OpenRouterDesktop: all
+        OpenRouterDesktopTests: [test]
+    test:
+      targets:
+        - OpenRouterDesktopTests
